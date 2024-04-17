@@ -1,0 +1,61 @@
+---
+title: "Papery outlines"
+output: html_notebook
+---
+
+I have been creating volcano contours that I then post-process using Procreate on my ipad. I am curious to see if I could get scenes scanned with a lidar to create contours of scenes. In this notebook I use a file with a cloud point of my face that I obtained using a 3d scanner app on my iphone. I exported the scan as a point cloud, xyz with color. 
+
+The name of this file is `scan.xyz`, and it can be read using `read.delim`, for example: 
+```{r}
+scene <- read.delim("scan.xyz", sep = " ", col.names = c("x", "y", "z", "R", "B", "G"))
+```
+
+
+Load packages:
+```{r}
+library(dplyr)
+library(ggplot2)
+library(terra)
+```
+
+The point cloud needs to be rasterized; to do this, first define an extent for the whole scene, based on the maximum and minimum values on x and y:
+```{r}
+extent <- ext(matrix(c(min(scene$x), min(scene$y), max(scene$x), max(scene$y)), ncol = 2, byrow = TRUE))
+```
+
+Set up the raster using the extent:
+```{r}
+r <- rast(extent, ncol=150, 
+          nrow = 150)
+```
+
+The number of rows and columns has to be such that there are few or no cells with no point; if the number of cells is very large, and the cells are small, there will be cells without a point from the point cloud, which will mess up the contours later on.
+
+To convert the point cloud to a raster, we need the x and y coordintes, which are in general an irregular grid; we need to rovide a function to indicate how to deal with multiple points in the same cell of the raster:
+```{r}
+scene2 <- rasterize(x = as.matrix(scene[,1:2], ncol = 2, byrow = TRUE),
+               y = r,
+               scene[,3], 
+               fun = mean,
+               background = 0)
+plot(scene2)
+```
+
+Convert the raster to data frame:
+```{r}
+scene3 <- as.data.frame(scene2, 
+                      xy = TRUE)
+```
+
+Plot the contours:
+```{r}
+ggplot(data = scene3,
+       aes(x, y, z = mean, color = mean)) +
+  geom_point() +
+  scale_color_distiller(direction = 1) +
+  coord_equal() +
+  # Use breaks instead of number of bins to avoid many curves concentrating at the interface between the object and the background
+  geom_contour(breaks = c(0, 0.3, seq(0.35, 0.55, 0.005), 0.56),
+                        color = "black")
+```
+
